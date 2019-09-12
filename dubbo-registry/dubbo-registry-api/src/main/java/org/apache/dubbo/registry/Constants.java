@@ -61,6 +61,7 @@ public interface Constants {
     String EXTRA_KEYS_KEY = "extra-keys";
 
     /**
+     * 决定注册中心是否同步保存本地缓存，默认是异步保存
      * To decide whether register center saves file synchronously, the default value is asynchronously
      */
     String REGISTRY_FILESAVE_SYNC_KEY = "save.file";

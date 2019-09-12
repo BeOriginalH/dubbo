@@ -49,56 +49,122 @@ public abstract class FailbackRegistry extends AbstractRegistry {
 
     /*  retry task map */
 
+    /**
+     * 注册失败的URL和定时器集合
+     */
     private final ConcurrentMap<URL, FailedRegisteredTask> failedRegistered = new ConcurrentHashMap<URL, FailedRegisteredTask>();
 
+    /**
+     * 取消注册失败的URL和定时器集合
+     */
     private final ConcurrentMap<URL, FailedUnregisteredTask> failedUnregistered = new ConcurrentHashMap<URL, FailedUnregisteredTask>();
 
+    /**
+     * 订阅失败的集合
+     */
     private final ConcurrentMap<Holder, FailedSubscribedTask> failedSubscribed = new ConcurrentHashMap<Holder, FailedSubscribedTask>();
 
+    /**
+     * 取消订阅失败的集合
+     */
     private final ConcurrentMap<Holder, FailedUnsubscribedTask> failedUnsubscribed = new ConcurrentHashMap<Holder, FailedUnsubscribedTask>();
 
+    /**
+     * 通知失败的集合
+     */
     private final ConcurrentMap<Holder, FailedNotifiedTask> failedNotified = new ConcurrentHashMap<Holder, FailedNotifiedTask>();
 
     /**
+     * 重试间隔时间毫秒
      * The time in milliseconds the retryExecutor will wait
      */
     private final int retryPeriod;
 
+    //    失败重试定时器，定时去检查是否有请求失败的，如有，无限次重试。
     // Timer for failure retry, regular check if there is a request for failure, and if there is, an unlimited retry
     private final HashedWheelTimer retryTimer;
 
+    /**
+     * 构造器
+     *
+     * @param url
+     */
     public FailbackRegistry(URL url) {
+        //调用父类，设置注册中心，本地缓存等
         super(url);
+
+        //从请求中获取重试的频率，可以在URL中设置retry.period来设置频率 默认为5秒
         this.retryPeriod = url.getParameter(REGISTRY_RETRY_PERIOD_KEY, DEFAULT_REGISTRY_RETRY_PERIOD);
 
         // since the retry task will not be very much. 128 ticks is enough.
-        retryTimer = new HashedWheelTimer(new NamedThreadFactory("DubboRegistryRetryTimer", true), retryPeriod, TimeUnit.MILLISECONDS, 128);
+        //创建重试定时器
+        retryTimer = new HashedWheelTimer(new NamedThreadFactory("DubboRegistryRetryTimer", true), retryPeriod,
+            TimeUnit.MILLISECONDS, 128);
     }
 
+    /**
+     * 在注册失败的集合中将指定的值移除
+     *
+     * @param url
+     */
     public void removeFailedRegisteredTask(URL url) {
+
         failedRegistered.remove(url);
     }
 
+    /**
+     * 在取消注册失败的集合中将指定的值移除
+     *
+     * @param url
+     */
     public void removeFailedUnregisteredTask(URL url) {
+
         failedUnregistered.remove(url);
     }
 
+    /**
+     * 在订阅失败的集合中将指定的值移除
+     *
+     * @param url
+     * @param listener
+     */
     public void removeFailedSubscribedTask(URL url, NotifyListener listener) {
+
         Holder h = new Holder(url, listener);
         failedSubscribed.remove(h);
     }
 
+    /**
+     * 在取消订阅失败的集合中将指定的值移除
+     *
+     * @param url
+     * @param listener
+     */
     public void removeFailedUnsubscribedTask(URL url, NotifyListener listener) {
+
         Holder h = new Holder(url, listener);
         failedUnsubscribed.remove(h);
     }
 
+    /**
+     * 在通知失败的集合中将指定的值移除
+     *
+     * @param url
+     * @param listener
+     */
     public void removeFailedNotifiedTask(URL url, NotifyListener listener) {
+
         Holder h = new Holder(url, listener);
         failedNotified.remove(h);
     }
 
+    /**
+     * 将指定的URL加入重新注册集合中
+     *
+     * @param url
+     */
     private void addFailedRegistered(URL url) {
+
         FailedRegisteredTask oldOne = failedRegistered.get(url);
         if (oldOne != null) {
             return;
@@ -111,7 +177,13 @@ public abstract class FailbackRegistry extends AbstractRegistry {
         }
     }
 
+    /**
+     * 将指定的URL从注册失败的集合中移除，并将重试的任务取消
+     *
+     * @param url
+     */
     private void removeFailedRegistered(URL url) {
+
         FailedRegisteredTask f = failedRegistered.remove(url);
         if (f != null) {
             f.cancel();
@@ -119,6 +191,7 @@ public abstract class FailbackRegistry extends AbstractRegistry {
     }
 
     private void addFailedUnregistered(URL url) {
+
         FailedUnregisteredTask oldOne = failedUnregistered.get(url);
         if (oldOne != null) {
             return;
@@ -132,6 +205,7 @@ public abstract class FailbackRegistry extends AbstractRegistry {
     }
 
     private void removeFailedUnregistered(URL url) {
+
         FailedUnregisteredTask f = failedUnregistered.remove(url);
         if (f != null) {
             f.cancel();
@@ -139,6 +213,7 @@ public abstract class FailbackRegistry extends AbstractRegistry {
     }
 
     private void addFailedSubscribed(URL url, NotifyListener listener) {
+
         Holder h = new Holder(url, listener);
         FailedSubscribedTask oldOne = failedSubscribed.get(h);
         if (oldOne != null) {
@@ -153,6 +228,7 @@ public abstract class FailbackRegistry extends AbstractRegistry {
     }
 
     private void removeFailedSubscribed(URL url, NotifyListener listener) {
+
         Holder h = new Holder(url, listener);
         FailedSubscribedTask f = failedSubscribed.remove(h);
         if (f != null) {
@@ -163,6 +239,7 @@ public abstract class FailbackRegistry extends AbstractRegistry {
     }
 
     private void addFailedUnsubscribed(URL url, NotifyListener listener) {
+
         Holder h = new Holder(url, listener);
         FailedUnsubscribedTask oldOne = failedUnsubscribed.get(h);
         if (oldOne != null) {
@@ -177,6 +254,7 @@ public abstract class FailbackRegistry extends AbstractRegistry {
     }
 
     private void removeFailedUnsubscribed(URL url, NotifyListener listener) {
+
         Holder h = new Holder(url, listener);
         FailedUnsubscribedTask f = failedUnsubscribed.remove(h);
         if (f != null) {
@@ -185,6 +263,7 @@ public abstract class FailbackRegistry extends AbstractRegistry {
     }
 
     private void addFailedNotified(URL url, NotifyListener listener, List<URL> urls) {
+
         Holder h = new Holder(url, listener);
         FailedNotifiedTask newTask = new FailedNotifiedTask(url, listener);
         FailedNotifiedTask f = failedNotified.putIfAbsent(h, newTask);
@@ -199,6 +278,7 @@ public abstract class FailbackRegistry extends AbstractRegistry {
     }
 
     private void removeFailedNotified(URL url, NotifyListener listener) {
+
         Holder h = new Holder(url, listener);
         FailedNotifiedTask f = failedNotified.remove(h);
         if (f != null) {
@@ -207,57 +287,81 @@ public abstract class FailbackRegistry extends AbstractRegistry {
     }
 
     ConcurrentMap<URL, FailedRegisteredTask> getFailedRegistered() {
+
         return failedRegistered;
     }
 
     ConcurrentMap<URL, FailedUnregisteredTask> getFailedUnregistered() {
+
         return failedUnregistered;
     }
 
     ConcurrentMap<Holder, FailedSubscribedTask> getFailedSubscribed() {
+
         return failedSubscribed;
     }
 
     ConcurrentMap<Holder, FailedUnsubscribedTask> getFailedUnsubscribed() {
+
         return failedUnsubscribed;
     }
 
     ConcurrentMap<Holder, FailedNotifiedTask> getFailedNotified() {
+
         return failedNotified;
     }
 
+    /**
+     * 注册地址
+     *
+     * @param url
+     */
     @Override
     public void register(URL url) {
+
+        //调用父类的注册方法，将URL存入registered中
         super.register(url);
+
+        //将该URL从注册失败的集合中移除
         removeFailedRegistered(url);
+
+        //将该URL从取消注册失败的集合中移除
         removeFailedUnregistered(url);
+
         try {
             // Sending a registration request to the server side
+            //做注册的操作
             doRegister(url);
         } catch (Exception e) {
             Throwable t = e;
 
             // If the startup detection is opened, the Exception is thrown directly.
-            boolean check = getUrl().getParameter(Constants.CHECK_KEY, true)
-                    && url.getParameter(Constants.CHECK_KEY, true)
+            //            当设置 <dubbo:registry check="false" /> 时，记录失败注册和订阅请求，后台定时重试
+            boolean check =
+                getUrl().getParameter(Constants.CHECK_KEY, true) && url.getParameter(Constants.CHECK_KEY, true)
                     && !CONSUMER_PROTOCOL.equals(url.getProtocol());
             boolean skipFailback = t instanceof SkipFailbackWrapperException;
+            //如果不需要重试，则抛出异常，否则加入重新注册集合
             if (check || skipFailback) {
                 if (skipFailback) {
                     t = t.getCause();
                 }
-                throw new IllegalStateException("Failed to register " + url + " to registry " + getUrl().getAddress() + ", cause: " + t.getMessage(), t);
+                throw new IllegalStateException(
+                    "Failed to register " + url + " to registry " + getUrl().getAddress() + ", cause: " + t
+                        .getMessage(), t);
             } else {
                 logger.error("Failed to register " + url + ", waiting for retry, cause: " + t.getMessage(), t);
             }
 
             // Record a failed registration request to a failed list, retry regularly
+            //加入重新注册集合中
             addFailedRegistered(url);
         }
     }
 
     @Override
     public void unregister(URL url) {
+
         super.unregister(url);
         removeFailedRegistered(url);
         removeFailedUnregistered(url);
@@ -268,15 +372,17 @@ public abstract class FailbackRegistry extends AbstractRegistry {
             Throwable t = e;
 
             // If the startup detection is opened, the Exception is thrown directly.
-            boolean check = getUrl().getParameter(Constants.CHECK_KEY, true)
-                    && url.getParameter(Constants.CHECK_KEY, true)
+            boolean check =
+                getUrl().getParameter(Constants.CHECK_KEY, true) && url.getParameter(Constants.CHECK_KEY, true)
                     && !CONSUMER_PROTOCOL.equals(url.getProtocol());
             boolean skipFailback = t instanceof SkipFailbackWrapperException;
             if (check || skipFailback) {
                 if (skipFailback) {
                     t = t.getCause();
                 }
-                throw new IllegalStateException("Failed to unregister " + url + " to registry " + getUrl().getAddress() + ", cause: " + t.getMessage(), t);
+                throw new IllegalStateException(
+                    "Failed to unregister " + url + " to registry " + getUrl().getAddress() + ", cause: " + t
+                        .getMessage(), t);
             } else {
                 logger.error("Failed to unregister " + url + ", waiting for retry, cause: " + t.getMessage(), t);
             }
@@ -288,6 +394,7 @@ public abstract class FailbackRegistry extends AbstractRegistry {
 
     @Override
     public void subscribe(URL url, NotifyListener listener) {
+
         super.subscribe(url, listener);
         removeFailedSubscribed(url, listener);
         try {
@@ -299,11 +406,15 @@ public abstract class FailbackRegistry extends AbstractRegistry {
             List<URL> urls = getCacheUrls(url);
             if (CollectionUtils.isNotEmpty(urls)) {
                 notify(url, listener, urls);
-                logger.error("Failed to subscribe " + url + ", Using cached list: " + urls + " from cache file: " + getUrl().getParameter(FILE_KEY, System.getProperty("user.home") + "/dubbo-registry-" + url.getHost() + ".cache") + ", cause: " + t.getMessage(), t);
+                logger.error(
+                    "Failed to subscribe " + url + ", Using cached list: " + urls + " from cache file: " + getUrl()
+                        .getParameter(FILE_KEY,
+                            System.getProperty("user.home") + "/dubbo-registry-" + url.getHost() + ".cache")
+                        + ", cause: " + t.getMessage(), t);
             } else {
                 // If the startup detection is opened, the Exception is thrown directly.
-                boolean check = getUrl().getParameter(Constants.CHECK_KEY, true)
-                        && url.getParameter(Constants.CHECK_KEY, true);
+                boolean check =
+                    getUrl().getParameter(Constants.CHECK_KEY, true) && url.getParameter(Constants.CHECK_KEY, true);
                 boolean skipFailback = t instanceof SkipFailbackWrapperException;
                 if (check || skipFailback) {
                     if (skipFailback) {
@@ -322,6 +433,7 @@ public abstract class FailbackRegistry extends AbstractRegistry {
 
     @Override
     public void unsubscribe(URL url, NotifyListener listener) {
+
         super.unsubscribe(url, listener);
         removeFailedSubscribed(url, listener);
         try {
@@ -331,14 +443,16 @@ public abstract class FailbackRegistry extends AbstractRegistry {
             Throwable t = e;
 
             // If the startup detection is opened, the Exception is thrown directly.
-            boolean check = getUrl().getParameter(Constants.CHECK_KEY, true)
-                    && url.getParameter(Constants.CHECK_KEY, true);
+            boolean check =
+                getUrl().getParameter(Constants.CHECK_KEY, true) && url.getParameter(Constants.CHECK_KEY, true);
             boolean skipFailback = t instanceof SkipFailbackWrapperException;
             if (check || skipFailback) {
                 if (skipFailback) {
                     t = t.getCause();
                 }
-                throw new IllegalStateException("Failed to unsubscribe " + url + " to registry " + getUrl().getAddress() + ", cause: " + t.getMessage(), t);
+                throw new IllegalStateException(
+                    "Failed to unsubscribe " + url + " to registry " + getUrl().getAddress() + ", cause: " + t
+                        .getMessage(), t);
             } else {
                 logger.error("Failed to unsubscribe " + url + ", waiting for retry, cause: " + t.getMessage(), t);
             }
@@ -350,6 +464,7 @@ public abstract class FailbackRegistry extends AbstractRegistry {
 
     @Override
     protected void notify(URL url, NotifyListener listener, List<URL> urls) {
+
         if (url == null) {
             throw new IllegalArgumentException("notify url == null");
         }
@@ -366,6 +481,7 @@ public abstract class FailbackRegistry extends AbstractRegistry {
     }
 
     protected void doNotify(URL url, NotifyListener listener, List<URL> urls) {
+
         super.notify(url, listener, urls);
     }
 
@@ -398,12 +514,18 @@ public abstract class FailbackRegistry extends AbstractRegistry {
 
     @Override
     public void destroy() {
+
         super.destroy();
         retryTimer.stop();
     }
 
     // ==== Template method ====
 
+    /**
+     * 做注册，该方法是一个模板方法，需要具体的注册中心实现
+     *
+     * @param url
+     */
     public abstract void doRegister(URL url);
 
     public abstract void doUnregister(URL url);
@@ -419,6 +541,7 @@ public abstract class FailbackRegistry extends AbstractRegistry {
         private final NotifyListener notifyListener;
 
         Holder(URL url, NotifyListener notifyListener) {
+
             if (url == null || notifyListener == null) {
                 throw new IllegalArgumentException();
             }
@@ -428,11 +551,13 @@ public abstract class FailbackRegistry extends AbstractRegistry {
 
         @Override
         public int hashCode() {
+
             return url.hashCode() + notifyListener.hashCode();
         }
 
         @Override
         public boolean equals(Object obj) {
+
             if (obj instanceof Holder) {
                 Holder h = (Holder) obj;
                 return this.url.equals(h.url) && this.notifyListener.equals(h.notifyListener);

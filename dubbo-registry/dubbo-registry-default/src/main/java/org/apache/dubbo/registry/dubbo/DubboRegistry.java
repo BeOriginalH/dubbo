@@ -39,6 +39,7 @@ import java.util.concurrent.locks.ReentrantLock;
 import static org.apache.dubbo.registry.Constants.REGISTRY_RECONNECT_PERIOD_KEY;
 
 /**
+ * dubbo默认的注册中心
  * DubboRegistry
  */
 public class DubboRegistry extends FailbackRegistry {
@@ -46,32 +47,52 @@ public class DubboRegistry extends FailbackRegistry {
     private final static Logger logger = LoggerFactory.getLogger(DubboRegistry.class);
 
     // Reconnecting detection cycle: 3 seconds (unit:millisecond)
+    /**
+     * 连接失败后重新连接的时间间隔
+     */
     private static final int RECONNECT_PERIOD_DEFAULT = 3 * 1000;
 
     // Scheduled executor service
-    private final ScheduledExecutorService reconnectTimer = Executors.newScheduledThreadPool(1, new NamedThreadFactory("DubboRegistryReconnectTimer", true));
+    /**
+     * 重新连接的任务调度器
+     */
+    private final ScheduledExecutorService reconnectTimer = Executors
+        .newScheduledThreadPool(1, new NamedThreadFactory("DubboRegistryReconnectTimer", true));
 
     // Reconnection timer, regular check connection is available. If unavailable, unlimited reconnection.
+
+    /**
+     * 重新连接的执行器
+     */
     private final ScheduledFuture<?> reconnectFuture;
 
     // The lock for client acquisition process, lock the creation process of the client instance to prevent repeated clients
     private final ReentrantLock clientLock = new ReentrantLock();
 
+    /**
+     * 注册中心invoker
+     */
     private final Invoker<RegistryService> registryInvoker;
 
+    /**
+     * 注册服务
+     */
     private final RegistryService registryService;
 
     /**
      * The time in milliseconds the reconnectTimer will wait
+     * 任务调度器需要等待的时间
      */
     private final int reconnectPeriod;
 
     public DubboRegistry(Invoker<RegistryService> registryInvoker, RegistryService registryService) {
+
         super(registryInvoker.getUrl());
         this.registryInvoker = registryInvoker;
         this.registryService = registryService;
         // Start reconnection timer
-        this.reconnectPeriod = registryInvoker.getUrl().getParameter(REGISTRY_RECONNECT_PERIOD_KEY, RECONNECT_PERIOD_DEFAULT);
+        this.reconnectPeriod = registryInvoker.getUrl()
+            .getParameter(REGISTRY_RECONNECT_PERIOD_KEY, RECONNECT_PERIOD_DEFAULT);
         reconnectFuture = reconnectTimer.scheduleWithFixedDelay(() -> {
             // Check and connect to the registry
             try {
@@ -83,6 +104,7 @@ public class DubboRegistry extends FailbackRegistry {
     }
 
     protected final void connect() {
+
         try {
             // Check whether or not it is connected
             if (isAvailable()) {
@@ -108,12 +130,15 @@ public class DubboRegistry extends FailbackRegistry {
                 }
                 throw new RuntimeException(t.getMessage(), t);
             }
-            logger.error("Failed to connect to registry " + getUrl().getAddress() + " from provider/consumer " + NetUtils.getLocalHost() + " use dubbo " + Version.getVersion() + ", cause: " + t.getMessage(), t);
+            logger.error(
+                "Failed to connect to registry " + getUrl().getAddress() + " from provider/consumer " + NetUtils
+                    .getLocalHost() + " use dubbo " + Version.getVersion() + ", cause: " + t.getMessage(), t);
         }
     }
 
     @Override
     public boolean isAvailable() {
+
         if (registryInvoker == null) {
             return false;
         }
@@ -122,6 +147,7 @@ public class DubboRegistry extends FailbackRegistry {
 
     @Override
     public void destroy() {
+
         super.destroy();
         try {
             // Cancel the reconnection timer
@@ -135,26 +161,31 @@ public class DubboRegistry extends FailbackRegistry {
 
     @Override
     public void doRegister(URL url) {
+
         registryService.register(url);
     }
 
     @Override
     public void doUnregister(URL url) {
+
         registryService.unregister(url);
     }
 
     @Override
     public void doSubscribe(URL url, NotifyListener listener) {
+
         registryService.subscribe(url, listener);
     }
 
     @Override
     public void doUnsubscribe(URL url, NotifyListener listener) {
+
         registryService.unsubscribe(url, listener);
     }
 
     @Override
     public List<URL> lookup(URL url) {
+
         return registryService.lookup(url);
     }
 

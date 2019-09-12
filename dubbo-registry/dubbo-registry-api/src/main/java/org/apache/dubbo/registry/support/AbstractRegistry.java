@@ -66,50 +66,138 @@ import static org.apache.dubbo.registry.Constants.REGISTRY_FILESAVE_SYNC_KEY;
 public abstract class AbstractRegistry implements Registry {
 
     // URL address separator, used in file cache, service provider URL separation
+
+    /**
+     * 在文件缓存的时候用于分割服务提供方的URL的分隔符
+     */
     private static final char URL_SEPARATOR = ' ';
+
     // URL address separated regular expression for parsing the service provider URL list in the file cache
+
+    /**
+     * 在解析服务提供者URL列表的时候提供的正则表达式
+     */
     private static final String URL_SPLIT = "\\s+";
+
     // Max times to retry to save properties to local cache file
+
+    /**
+     * 将properties缓存到本地文件的重试次数
+     */
     private static final int MAX_RETRY_TIMES_SAVE_PROPERTIES = 3;
+
     // Log output
     protected final Logger logger = LoggerFactory.getLogger(getClass());
+
     // Local disk cache, where the special key value.registries records the list of registry centers, and the others are the list of notified service providers
+
+    /**
+     * 本地磁盘缓存，其中缓存了一个key值为registries，value是注册中心列表，其他的是缓存服务提供方的列表
+     */
     private final Properties properties = new Properties();
+
     // File cache timing writing
-    private final ExecutorService registryCacheExecutor = Executors.newFixedThreadPool(1, new NamedThreadFactory("DubboSaveRegistryCache", true));
+
+    /**
+     * 缓存写入的执行器
+     */
+    private final ExecutorService registryCacheExecutor = Executors
+        .newFixedThreadPool(1, new NamedThreadFactory("DubboSaveRegistryCache", true));
+
     // Is it synchronized to save the file
+
+    /**
+     * 是否同步保存文件标识
+     */
     private final boolean syncSaveFile;
+
+    /**
+     * 记录最新的缓存版本
+     */
     private final AtomicLong lastCacheChanged = new AtomicLong();
+
+    /**
+     * 记录重试次数
+     */
     private final AtomicInteger savePropertiesRetryTimes = new AtomicInteger();
+
+    /**
+     * 已注册的URL集合
+     */
     private final Set<URL> registered = new ConcurrentHashSet<>();
+
+    /**
+     * 订阅绑定的监视器集合
+     */
     private final ConcurrentMap<URL, Set<NotifyListener>> subscribed = new ConcurrentHashMap<>();
+
+    /**
+     *
+     */
     private final ConcurrentMap<URL, Map<String, List<URL>>> notified = new ConcurrentHashMap<>();
+
+    /**
+     * 注册中心地址
+     */
     private URL registryUrl;
+
     // Local disk cache file
+
+    /**
+     * 本地缓存文件
+     */
     private File file;
 
+    /**
+     * 构造器
+     *
+     * @param url 注册中心地址
+     */
     public AbstractRegistry(URL url) {
+
+        //设置URL注册中心的值
         setUrl(url);
+
         // Start file save timer
+        //从URL中获取参数save.file，根据参数的值判断是否同步保存文件
         syncSaveFile = url.getParameter(REGISTRY_FILESAVE_SYNC_KEY, false);
-        String filename = url.getParameter(FILE_KEY, System.getProperty("user.home") + "/.dubbo/dubbo-registry-" + url.getParameter(APPLICATION_KEY) + "-" + url.getAddress() + ".cache");
+
+        //获取用户自定义的本地缓存路径，如果不存在，则使用默认缓存路径/{user.home}/.dubbo/dubbo-register-{applicationName}-{url.addr}.cache
+        String filename = url.getParameter(FILE_KEY,
+            System.getProperty("user.home") + "/.dubbo/dubbo-registry-" + url.getParameter(APPLICATION_KEY) + "-" + url
+                .getAddress() + ".cache");
+
+        //创建本地缓存文件
         File file = null;
         if (ConfigUtils.isNotEmpty(filename)) {
             file = new File(filename);
             if (!file.exists() && file.getParentFile() != null && !file.getParentFile().exists()) {
                 if (!file.getParentFile().mkdirs()) {
-                    throw new IllegalArgumentException("Invalid registry cache file " + file + ", cause: Failed to create directory " + file.getParentFile() + "!");
+                    throw new IllegalArgumentException(
+                        "Invalid registry cache file " + file + ", cause: Failed to create directory " + file
+                            .getParentFile() + "!");
                 }
             }
         }
         this.file = file;
         // When starting the subscription center,
         // we need to read the local cache file for future Registry fault tolerance processing.
+        // 加载本地文件信息到properties中
         loadProperties();
+
+        //通知监视器 URL变化的结果
         notify(url.getBackupUrls());
     }
 
+    /**
+     * 过滤出空值
+     *
+     * @param url
+     * @param urls
+     * @return
+     */
     protected static List<URL> filterEmpty(URL url, List<URL> urls) {
+
         if (CollectionUtils.isEmpty(urls)) {
             List<URL> result = new ArrayList<>(1);
             result.add(url.setProtocol(EMPTY_PROTOCOL));
@@ -120,10 +208,12 @@ public abstract class AbstractRegistry implements Registry {
 
     @Override
     public URL getUrl() {
+
         return registryUrl;
     }
 
     protected void setUrl(URL url) {
+
         if (url == null) {
             throw new IllegalArgumentException("registry url == null");
         }
@@ -131,30 +221,43 @@ public abstract class AbstractRegistry implements Registry {
     }
 
     public Set<URL> getRegistered() {
+
         return Collections.unmodifiableSet(registered);
     }
 
     public Map<URL, Set<NotifyListener>> getSubscribed() {
+
         return Collections.unmodifiableMap(subscribed);
     }
 
     public Map<URL, Map<String, List<URL>>> getNotified() {
+
         return Collections.unmodifiableMap(notified);
     }
 
     public File getCacheFile() {
+
         return file;
     }
 
     public Properties getCacheProperties() {
+
         return properties;
     }
 
     public AtomicLong getLastCacheChanged() {
+
         return lastCacheChanged;
     }
 
+    /**
+     * 将properties中的数据保存到缓存文件中
+     *
+     * @param version
+     */
     public void doSaveProperties(long version) {
+
+        //如果传入的版本号小于最新的版本号，直接返回
         if (version < lastCacheChanged.get()) {
             return;
         }
@@ -163,15 +266,16 @@ public abstract class AbstractRegistry implements Registry {
         }
         // Save
         try {
+            //
             File lockfile = new File(file.getAbsolutePath() + ".lock");
             if (!lockfile.exists()) {
                 lockfile.createNewFile();
             }
-            try (RandomAccessFile raf = new RandomAccessFile(lockfile, "rw");
-                 FileChannel channel = raf.getChannel()) {
+            try (RandomAccessFile raf = new RandomAccessFile(lockfile, "rw"); FileChannel channel = raf.getChannel()) {
                 FileLock lock = channel.tryLock();
                 if (lock == null) {
-                    throw new IOException("Can not lock the registry cache file " + file.getAbsolutePath() + ", ignore and retry later, maybe multi java process use the file, please config: dubbo.registry.file=xxx.properties");
+                    throw new IOException("Can not lock the registry cache file " + file.getAbsolutePath()
+                        + ", ignore and retry later, maybe multi java process use the file, please config: dubbo.registry.file=xxx.properties");
                 }
                 // Save
                 try {
@@ -188,7 +292,8 @@ public abstract class AbstractRegistry implements Registry {
         } catch (Throwable e) {
             savePropertiesRetryTimes.incrementAndGet();
             if (savePropertiesRetryTimes.get() >= MAX_RETRY_TIMES_SAVE_PROPERTIES) {
-                logger.warn("Failed to save registry cache file after retrying " + MAX_RETRY_TIMES_SAVE_PROPERTIES + " times, cause: " + e.getMessage(), e);
+                logger.warn("Failed to save registry cache file after retrying " + MAX_RETRY_TIMES_SAVE_PROPERTIES
+                    + " times, cause: " + e.getMessage(), e);
                 savePropertiesRetryTimes.set(0);
                 return;
             }
@@ -202,7 +307,11 @@ public abstract class AbstractRegistry implements Registry {
         }
     }
 
+    /**
+     * 从本地缓存的file中加载到properties
+     */
     private void loadProperties() {
+
         if (file != null && file.exists()) {
             InputStream in = null;
             try {
@@ -226,12 +335,12 @@ public abstract class AbstractRegistry implements Registry {
     }
 
     public List<URL> getCacheUrls(URL url) {
+
         for (Map.Entry<Object, Object> entry : properties.entrySet()) {
             String key = (String) entry.getKey();
             String value = (String) entry.getValue();
-            if (key != null && key.length() > 0 && key.equals(url.getServiceKey())
-                    && (Character.isLetter(key.charAt(0)) || key.charAt(0) == '_')
-                    && value != null && value.length() > 0) {
+            if (key != null && key.length() > 0 && key.equals(url.getServiceKey()) && (Character.isLetter(key.charAt(0))
+                || key.charAt(0) == '_') && value != null && value.length() > 0) {
                 String[] arr = value.trim().split(URL_SPLIT);
                 List<URL> urls = new ArrayList<>();
                 for (String u : arr) {
@@ -245,6 +354,7 @@ public abstract class AbstractRegistry implements Registry {
 
     @Override
     public List<URL> lookup(URL url) {
+
         List<URL> result = new ArrayList<>();
         Map<String, List<URL>> notifiedUrls = getNotified().get(url);
         if (notifiedUrls != null && notifiedUrls.size() > 0) {
@@ -271,19 +381,25 @@ public abstract class AbstractRegistry implements Registry {
         return result;
     }
 
+    /**
+     * 注册地址,只是将URL地址添加到registered集合中
+     */
     @Override
     public void register(URL url) {
+
         if (url == null) {
             throw new IllegalArgumentException("register url == null");
         }
         if (logger.isInfoEnabled()) {
             logger.info("Register: " + url);
         }
+
         registered.add(url);
     }
 
     @Override
     public void unregister(URL url) {
+
         if (url == null) {
             throw new IllegalArgumentException("unregister url == null");
         }
@@ -295,6 +411,7 @@ public abstract class AbstractRegistry implements Registry {
 
     @Override
     public void subscribe(URL url, NotifyListener listener) {
+
         if (url == null) {
             throw new IllegalArgumentException("subscribe url == null");
         }
@@ -310,6 +427,7 @@ public abstract class AbstractRegistry implements Registry {
 
     @Override
     public void unsubscribe(URL url, NotifyListener listener) {
+
         if (url == null) {
             throw new IllegalArgumentException("unsubscribe url == null");
         }
@@ -351,7 +469,13 @@ public abstract class AbstractRegistry implements Registry {
         }
     }
 
+    /**
+     * 通知消费者的监听器，url改变
+     *
+     * @param urls
+     */
     protected void notify(List<URL> urls) {
+
         if (CollectionUtils.isEmpty(urls)) {
             return;
         }
@@ -369,7 +493,8 @@ public abstract class AbstractRegistry implements Registry {
                     try {
                         notify(url, listener, filterEmpty(url, urls));
                     } catch (Throwable t) {
-                        logger.error("Failed to notify registry event, urls: " + urls + ", cause: " + t.getMessage(), t);
+                        logger
+                            .error("Failed to notify registry event, urls: " + urls + ", cause: " + t.getMessage(), t);
                     }
                 }
             }
@@ -384,14 +509,14 @@ public abstract class AbstractRegistry implements Registry {
      * @param urls     provider latest urls
      */
     protected void notify(URL url, NotifyListener listener, List<URL> urls) {
+
         if (url == null) {
             throw new IllegalArgumentException("notify url == null");
         }
         if (listener == null) {
             throw new IllegalArgumentException("notify listener == null");
         }
-        if ((CollectionUtils.isEmpty(urls))
-                && !ANY_VALUE.equals(url.getServiceInterface())) {
+        if ((CollectionUtils.isEmpty(urls)) && !ANY_VALUE.equals(url.getServiceInterface())) {
             logger.warn("Ignore empty notify urls for subscribe url " + url);
             return;
         }
@@ -423,6 +548,7 @@ public abstract class AbstractRegistry implements Registry {
     }
 
     private void saveProperties(URL url) {
+
         if (file == null) {
             return;
         }
@@ -454,6 +580,7 @@ public abstract class AbstractRegistry implements Registry {
 
     @Override
     public void destroy() {
+
         if (logger.isInfoEnabled()) {
             logger.info("Destroy registry:" + getUrl());
         }
@@ -467,7 +594,9 @@ public abstract class AbstractRegistry implements Registry {
                             logger.info("Destroy unregister url " + url);
                         }
                     } catch (Throwable t) {
-                        logger.warn("Failed to unregister url " + url + " to registry " + getUrl() + " on destroy, cause: " + t.getMessage(), t);
+                        logger.warn(
+                            "Failed to unregister url " + url + " to registry " + getUrl() + " on destroy, cause: " + t
+                                .getMessage(), t);
                     }
                 }
             }
@@ -483,7 +612,9 @@ public abstract class AbstractRegistry implements Registry {
                             logger.info("Destroy unsubscribe url " + url);
                         }
                     } catch (Throwable t) {
-                        logger.warn("Failed to unsubscribe url " + url + " to registry " + getUrl() + " on destroy, cause: " + t.getMessage(), t);
+                        logger.warn(
+                            "Failed to unsubscribe url " + url + " to registry " + getUrl() + " on destroy, cause: " + t
+                                .getMessage(), t);
                     }
                 }
             }
@@ -492,18 +623,22 @@ public abstract class AbstractRegistry implements Registry {
 
     @Override
     public String toString() {
+
         return getUrl().toString();
     }
 
     private class SaveProperties implements Runnable {
+
         private long version;
 
         private SaveProperties(long version) {
+
             this.version = version;
         }
 
         @Override
         public void run() {
+
             doSaveProperties(version);
         }
     }

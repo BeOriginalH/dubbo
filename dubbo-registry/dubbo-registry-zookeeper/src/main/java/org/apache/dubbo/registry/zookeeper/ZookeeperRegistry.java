@@ -53,36 +53,67 @@ import static org.apache.dubbo.common.constants.RegistryConstants.PROVIDERS_CATE
 import static org.apache.dubbo.common.constants.RegistryConstants.ROUTERS_CATEGORY;
 
 /**
+ * zookeeper注册中心
  * ZookeeperRegistry
- *
  */
 public class ZookeeperRegistry extends FailbackRegistry {
 
     private final static Logger logger = LoggerFactory.getLogger(ZookeeperRegistry.class);
 
+    /**
+     * zookeeper默认德端口
+     */
     private final static int DEFAULT_ZOOKEEPER_PORT = 2181;
 
+    /**
+     * dubbo在zookeeper中的root层默认名称，可以通过<dubbo:register group="other"/>来设置
+     */
     private final static String DEFAULT_ROOT = "dubbo";
 
+    /**
+     * dubbo在zookeeper中的root节点名称，默认为dubbo
+     */
     private final String root;
 
+    /**
+     * 服务接口集合
+     */
     private final Set<String> anyServices = new ConcurrentHashSet<>();
 
+    /**
+     * 监听器集合
+     */
     private final ConcurrentMap<URL, ConcurrentMap<NotifyListener, ChildListener>> zkListeners = new ConcurrentHashMap<>();
 
+    /**
+     * zookeeper客户端
+     */
     private final ZookeeperClient zkClient;
 
+    /**
+     * 构造器
+     *
+     * @param url                  zookeeper地址
+     * @param zookeeperTransporter zookeeper连接
+     */
     public ZookeeperRegistry(URL url, ZookeeperTransporter zookeeperTransporter) {
+
         super(url);
+        //如果地址是0.0.0.0，则抛出异常
         if (url.isAnyHost()) {
             throw new IllegalStateException("registry address == null");
         }
+        //获取group的值，默认为dubbo
         String group = url.getParameter(GROUP_KEY, DEFAULT_ROOT);
+        //如果group不是以/开始，加上/
         if (!group.startsWith(PATH_SEPARATOR)) {
             group = PATH_SEPARATOR + group;
         }
+        //设置root的值
         this.root = group;
+        //连接zookeeper服务器，获取zk客户端
         zkClient = zookeeperTransporter.connect(url);
+        //给zk客户端添加一个状态发生改变的监听器，当监听到状态值为重新连接的时候，调研恢复方法
         zkClient.addStateListener(state -> {
             if (state == StateListener.RECONNECTED) {
                 try {
@@ -96,11 +127,13 @@ public class ZookeeperRegistry extends FailbackRegistry {
 
     @Override
     public boolean isAvailable() {
+
         return zkClient.isConnected();
     }
 
     @Override
     public void destroy() {
+
         super.destroy();
         try {
             zkClient.close();
@@ -111,24 +144,29 @@ public class ZookeeperRegistry extends FailbackRegistry {
 
     @Override
     public void doRegister(URL url) {
+
         try {
             zkClient.create(toUrlPath(url), url.getParameter(DYNAMIC_KEY, true));
         } catch (Throwable e) {
-            throw new RpcException("Failed to register " + url + " to zookeeper " + getUrl() + ", cause: " + e.getMessage(), e);
+            throw new RpcException(
+                "Failed to register " + url + " to zookeeper " + getUrl() + ", cause: " + e.getMessage(), e);
         }
     }
 
     @Override
     public void doUnregister(URL url) {
+
         try {
             zkClient.delete(toUrlPath(url));
         } catch (Throwable e) {
-            throw new RpcException("Failed to unregister " + url + " to zookeeper " + getUrl() + ", cause: " + e.getMessage(), e);
+            throw new RpcException(
+                "Failed to unregister " + url + " to zookeeper " + getUrl() + ", cause: " + e.getMessage(), e);
         }
     }
 
     @Override
     public void doSubscribe(final URL url, final NotifyListener listener) {
+
         try {
             if (ANY_VALUE.equals(url.getServiceInterface())) {
                 String root = toRootPath();
@@ -144,8 +182,9 @@ public class ZookeeperRegistry extends FailbackRegistry {
                             child = URL.decode(child);
                             if (!anyServices.contains(child)) {
                                 anyServices.add(child);
-                                subscribe(url.setPath(child).addParameters(INTERFACE_KEY, child,
-                                        Constants.CHECK_KEY, String.valueOf(false)), listener);
+                                subscribe(url.setPath(child)
+                                        .addParameters(INTERFACE_KEY, child, Constants.CHECK_KEY, String.valueOf(false)),
+                                    listener);
                             }
                         }
                     });
@@ -157,8 +196,9 @@ public class ZookeeperRegistry extends FailbackRegistry {
                     for (String service : services) {
                         service = URL.decode(service);
                         anyServices.add(service);
-                        subscribe(url.setPath(service).addParameters(INTERFACE_KEY, service,
-                                Constants.CHECK_KEY, String.valueOf(false)), listener);
+                        subscribe(url.setPath(service)
+                                .addParameters(INTERFACE_KEY, service, Constants.CHECK_KEY, String.valueOf(false)),
+                            listener);
                     }
                 }
             } else {
@@ -171,7 +211,8 @@ public class ZookeeperRegistry extends FailbackRegistry {
                     }
                     ChildListener zkListener = listeners.get(listener);
                     if (zkListener == null) {
-                        listeners.putIfAbsent(listener, (parentPath, currentChilds) -> ZookeeperRegistry.this.notify(url, listener, toUrlsWithEmpty(url, parentPath, currentChilds)));
+                        listeners.putIfAbsent(listener, (parentPath, currentChilds) -> ZookeeperRegistry.this
+                            .notify(url, listener, toUrlsWithEmpty(url, parentPath, currentChilds)));
                         zkListener = listeners.get(listener);
                     }
                     zkClient.create(path, false);
@@ -183,12 +224,14 @@ public class ZookeeperRegistry extends FailbackRegistry {
                 notify(url, listener, urls);
             }
         } catch (Throwable e) {
-            throw new RpcException("Failed to subscribe " + url + " to zookeeper " + getUrl() + ", cause: " + e.getMessage(), e);
+            throw new RpcException(
+                "Failed to subscribe " + url + " to zookeeper " + getUrl() + ", cause: " + e.getMessage(), e);
         }
     }
 
     @Override
     public void doUnsubscribe(URL url, NotifyListener listener) {
+
         ConcurrentMap<NotifyListener, ChildListener> listeners = zkListeners.get(url);
         if (listeners != null) {
             ChildListener zkListener = listeners.get(listener);
@@ -207,6 +250,7 @@ public class ZookeeperRegistry extends FailbackRegistry {
 
     @Override
     public List<URL> lookup(URL url) {
+
         if (url == null) {
             throw new IllegalArgumentException("lookup url == null");
         }
@@ -220,11 +264,13 @@ public class ZookeeperRegistry extends FailbackRegistry {
             }
             return toUrlsWithoutEmpty(url, providers);
         } catch (Throwable e) {
-            throw new RpcException("Failed to lookup " + url + " from zookeeper " + getUrl() + ", cause: " + e.getMessage(), e);
+            throw new RpcException(
+                "Failed to lookup " + url + " from zookeeper " + getUrl() + ", cause: " + e.getMessage(), e);
         }
     }
 
     private String toRootDir() {
+
         if (root.equals(PATH_SEPARATOR)) {
             return root;
         }
@@ -232,10 +278,12 @@ public class ZookeeperRegistry extends FailbackRegistry {
     }
 
     private String toRootPath() {
+
         return root;
     }
 
     private String toServicePath(URL url) {
+
         String name = url.getServiceInterface();
         if (ANY_VALUE.equals(name)) {
             return toRootPath();
@@ -244,11 +292,13 @@ public class ZookeeperRegistry extends FailbackRegistry {
     }
 
     private String[] toCategoriesPath(URL url) {
+
         String[] categories;
         if (ANY_VALUE.equals(url.getParameter(CATEGORY_KEY))) {
-            categories = new String[]{PROVIDERS_CATEGORY, CONSUMERS_CATEGORY, ROUTERS_CATEGORY, CONFIGURATORS_CATEGORY};
+            categories = new String[] { PROVIDERS_CATEGORY, CONSUMERS_CATEGORY, ROUTERS_CATEGORY,
+                CONFIGURATORS_CATEGORY };
         } else {
-            categories = url.getParameter(CATEGORY_KEY, new String[]{DEFAULT_CATEGORY});
+            categories = url.getParameter(CATEGORY_KEY, new String[] { DEFAULT_CATEGORY });
         }
         String[] paths = new String[categories.length];
         for (int i = 0; i < categories.length; i++) {
@@ -258,14 +308,17 @@ public class ZookeeperRegistry extends FailbackRegistry {
     }
 
     private String toCategoryPath(URL url) {
+
         return toServicePath(url) + PATH_SEPARATOR + url.getParameter(CATEGORY_KEY, DEFAULT_CATEGORY);
     }
 
     private String toUrlPath(URL url) {
+
         return toCategoryPath(url) + PATH_SEPARATOR + URL.encode(url.toFullString());
     }
 
     private List<URL> toUrlsWithoutEmpty(URL consumer, List<String> providers) {
+
         List<URL> urls = new ArrayList<>();
         if (CollectionUtils.isNotEmpty(providers)) {
             for (String provider : providers) {
@@ -282,14 +335,13 @@ public class ZookeeperRegistry extends FailbackRegistry {
     }
 
     private List<URL> toUrlsWithEmpty(URL consumer, String path, List<String> providers) {
+
         List<URL> urls = toUrlsWithoutEmpty(consumer, providers);
         if (urls == null || urls.isEmpty()) {
             int i = path.lastIndexOf(PATH_SEPARATOR);
             String category = i < 0 ? path : path.substring(i + 1);
-            URL empty = URLBuilder.from(consumer)
-                    .setProtocol(EMPTY_PROTOCOL)
-                    .addParameter(CATEGORY_KEY, category)
-                    .build();
+            URL empty = URLBuilder.from(consumer).setProtocol(EMPTY_PROTOCOL).addParameter(CATEGORY_KEY, category)
+                .build();
             urls.add(empty);
         }
         return urls;
