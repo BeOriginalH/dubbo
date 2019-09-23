@@ -359,10 +359,16 @@ public abstract class FailbackRegistry extends AbstractRegistry {
         }
     }
 
+    /**
+     * 取消注册
+     * @param url Registration information , is not allowed to be empty, e.g: dubbo://10.20.153.10/org.apache.dubbo.foo.BarService?version=1.0.0&application=kylin
+     */
     @Override
     public void unregister(URL url) {
 
+        //调用父类的取消注册方法
         super.unregister(url);
+        //
         removeFailedRegistered(url);
         removeFailedUnregistered(url);
         try {
@@ -392,6 +398,11 @@ public abstract class FailbackRegistry extends AbstractRegistry {
         }
     }
 
+    /**
+     * 订阅
+     * @param url
+     * @param listener
+     */
     @Override
     public void subscribe(URL url, NotifyListener listener) {
 
@@ -431,6 +442,11 @@ public abstract class FailbackRegistry extends AbstractRegistry {
         }
     }
 
+    /**
+     * 取消订阅
+     * @param url
+     * @param listener
+     */
     @Override
     public void unsubscribe(URL url, NotifyListener listener) {
 
