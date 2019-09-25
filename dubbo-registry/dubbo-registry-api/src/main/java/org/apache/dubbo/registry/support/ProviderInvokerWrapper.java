@@ -23,6 +23,7 @@ import org.apache.dubbo.rpc.Result;
 import org.apache.dubbo.rpc.RpcException;
 
 /**
+ * 生产者的invoker包装器
  * @date 2017/11/23
  */
 public class ProviderInvokerWrapper<T> implements Invoker {

@@ -43,6 +43,7 @@ import static org.apache.dubbo.registry.Constants.DEFAULT_REGISTRY_RETRY_PERIOD;
 import static org.apache.dubbo.registry.Constants.REGISTRY_RETRY_PERIOD_KEY;
 
 /**
+ * 失败重试注册中心，主要是扩展了失败重试的策略
  * FailbackRegistry. (SPI, Prototype, ThreadSafe)
  */
 public abstract class FailbackRegistry extends AbstractRegistry {
@@ -93,7 +94,7 @@ public abstract class FailbackRegistry extends AbstractRegistry {
         //调用父类，设置注册中心，本地缓存等
         super(url);
 
-        //从请求中获取重试的频率，可以在URL中设置retry.period来设置频率 默认为5秒
+        //从请求中根据retry.period获取重试的频率， 默认为5秒
         this.retryPeriod = url.getParameter(REGISTRY_RETRY_PERIOD_KEY, DEFAULT_REGISTRY_RETRY_PERIOD);
 
         // since the retry task will not be very much. 128 ticks is enough.
@@ -159,7 +160,7 @@ public abstract class FailbackRegistry extends AbstractRegistry {
     }
 
     /**
-     * 将指定的URL加入重新注册集合中
+     * 将指定的URL加入失败注册集合中，并新增一个定时任务
      *
      * @param url
      */
@@ -190,6 +191,10 @@ public abstract class FailbackRegistry extends AbstractRegistry {
         }
     }
 
+    /**
+     * 添加取消注册失败的任务，并新增一个定时任务
+     * @param url
+     */
     private void addFailedUnregistered(URL url) {
 
         FailedUnregisteredTask oldOne = failedUnregistered.get(url);
@@ -204,6 +209,10 @@ public abstract class FailbackRegistry extends AbstractRegistry {
         }
     }
 
+    /**
+     * 移除取消注册任务，并取消
+     * @param url
+     */
     private void removeFailedUnregistered(URL url) {
 
         FailedUnregisteredTask f = failedUnregistered.remove(url);
@@ -212,6 +221,11 @@ public abstract class FailbackRegistry extends AbstractRegistry {
         }
     }
 
+    /**
+     * 添加订阅失败任务
+     * @param url
+     * @param listener
+     */
     private void addFailedSubscribed(URL url, NotifyListener listener) {
 
         Holder h = new Holder(url, listener);
@@ -227,6 +241,11 @@ public abstract class FailbackRegistry extends AbstractRegistry {
         }
     }
 
+    /**
+     * 移除订阅失败任务并取消
+     * @param url
+     * @param listener
+     */
     private void removeFailedSubscribed(URL url, NotifyListener listener) {
 
         Holder h = new Holder(url, listener);
@@ -238,6 +257,11 @@ public abstract class FailbackRegistry extends AbstractRegistry {
         removeFailedNotified(url, listener);
     }
 
+    /**
+     * 添加取消订阅失败任务
+     * @param url
+     * @param listener
+     */
     private void addFailedUnsubscribed(URL url, NotifyListener listener) {
 
         Holder h = new Holder(url, listener);
@@ -253,6 +277,11 @@ public abstract class FailbackRegistry extends AbstractRegistry {
         }
     }
 
+    /**
+     * 移除取消订阅失败任务并取消
+     * @param url
+     * @param listener
+     */
     private void removeFailedUnsubscribed(URL url, NotifyListener listener) {
 
         Holder h = new Holder(url, listener);
@@ -262,6 +291,12 @@ public abstract class FailbackRegistry extends AbstractRegistry {
         }
     }
 
+    /**
+     * 添加通知失败任务
+     * @param url
+     * @param listener
+     * @param urls
+     */
     private void addFailedNotified(URL url, NotifyListener listener, List<URL> urls) {
 
         Holder h = new Holder(url, listener);
@@ -277,6 +312,11 @@ public abstract class FailbackRegistry extends AbstractRegistry {
         }
     }
 
+    /**
+     * 移除通知失败任务
+     * @param url
+     * @param listener
+     */
     private void removeFailedNotified(URL url, NotifyListener listener) {
 
         Holder h = new Holder(url, listener);
@@ -312,7 +352,7 @@ public abstract class FailbackRegistry extends AbstractRegistry {
     }
 
     /**
-     * 注册地址
+     * 注册 重新父类方法
      *
      * @param url
      */
@@ -322,15 +362,15 @@ public abstract class FailbackRegistry extends AbstractRegistry {
         //调用父类的注册方法，将URL存入registered中
         super.register(url);
 
-        //将该URL从注册失败的集合中移除
+        //将该URL从注册失败的集合中移除，并将正在进行重试的任务取消
         removeFailedRegistered(url);
 
-        //将该URL从取消注册失败的集合中移除
+        //将该URL从取消注册失败的集合中移除，并将正在进行重试的任务取消
         removeFailedUnregistered(url);
 
         try {
             // Sending a registration request to the server side
-            //做注册的操作
+            //做注册的操作，模板方法，需要子类实现
             doRegister(url);
         } catch (Exception e) {
             Throwable t = e;
@@ -368,11 +408,13 @@ public abstract class FailbackRegistry extends AbstractRegistry {
 
         //调用父类的取消注册方法
         super.unregister(url);
-        //
+        //将该URL从注册失败的集合中移除，并将正在进行重试的任务取消
         removeFailedRegistered(url);
+        //将该URL从取消注册失败的集合中移除，并将正在进行重试的任务取消
         removeFailedUnregistered(url);
         try {
             // Sending a cancellation request to the server side
+            //取消注册，模板方法，需要子类实现
             doUnregister(url);
         } catch (Exception e) {
             Throwable t = e;
@@ -394,6 +436,7 @@ public abstract class FailbackRegistry extends AbstractRegistry {
             }
 
             // Record a failed registration request to a failed list, retry regularly
+            //异常后添加到取消注册失败的集合中
             addFailedUnregistered(url);
         }
     }
@@ -449,8 +492,10 @@ public abstract class FailbackRegistry extends AbstractRegistry {
      */
     @Override
     public void unsubscribe(URL url, NotifyListener listener) {
-
+        //调用父类的取消订阅
         super.unsubscribe(url, listener);
+
+        //
         removeFailedSubscribed(url, listener);
         try {
             // Sending a canceling subscription request to the server side
@@ -478,6 +523,12 @@ public abstract class FailbackRegistry extends AbstractRegistry {
         }
     }
 
+    /**
+     * 通知
+     * @param url      consumer side url 消费方的URL
+     * @param listener listener
+     * @param urls     provider latest urls 服务提供方最新的URL
+     */
     @Override
     protected void notify(URL url, NotifyListener listener, List<URL> urls) {
 
@@ -491,16 +542,27 @@ public abstract class FailbackRegistry extends AbstractRegistry {
             doNotify(url, listener, urls);
         } catch (Exception t) {
             // Record a failed registration request to a failed list, retry regularly
+            //异常后加入重新通知的集合中
             addFailedNotified(url, listener, urls);
             logger.error("Failed to notify for subscribe " + url + ", waiting for retry, cause: " + t.getMessage(), t);
         }
     }
 
+    /**
+     * 通知
+     * @param url
+     * @param listener
+     * @param urls
+     */
     protected void doNotify(URL url, NotifyListener listener, List<URL> urls) {
 
         super.notify(url, listener, urls);
     }
 
+    /**
+     * 恢复
+     * @throws Exception
+     */
     @Override
     protected void recover() throws Exception {
         // register
@@ -528,6 +590,9 @@ public abstract class FailbackRegistry extends AbstractRegistry {
         }
     }
 
+    /**
+     * 注销
+     */
     @Override
     public void destroy() {
 
@@ -538,7 +603,7 @@ public abstract class FailbackRegistry extends AbstractRegistry {
     // ==== Template method ====
 
     /**
-     * 做注册，该方法是一个模板方法，需要具体的注册中心实现
+     * 注册，该方法是一个模板方法，需要具体的注册中心实现
      *
      * @param url
      */

@@ -34,6 +34,7 @@ import static org.apache.dubbo.registry.Constants.REGISTRY_RETRY_PERIOD_KEY;
 import static org.apache.dubbo.registry.Constants.REGISTRY_RETRY_TIMES_KEY;
 
 /**
+ * 抽象重试任务
  * AbstractRetryTask
  */
 public abstract class AbstractRetryTask implements TimerTask {
@@ -41,38 +42,53 @@ public abstract class AbstractRetryTask implements TimerTask {
     protected final Logger logger = LoggerFactory.getLogger(getClass());
 
     /**
+     * 重试的URL
      * url for retry task
      */
     protected final URL url;
 
     /**
+     * 失败重试注册中心
      * registry for this task
      */
     protected final FailbackRegistry registry;
 
     /**
+     * 重试间隔
      * retry period
      */
     final long retryPeriod;
 
     /**
+     * 重试次数
      * define the most retry times
      */
     private final int retryTimes;
 
     /**
+     * 任务名称
      * task name for this task
      */
     private final String taskName;
 
     /**
+     * 重试次数
      * times of retry.
      * retry task is execute in single thread so that the times is not need volatile.
      */
     private int times = 1;
 
+    /**
+     * 是否取消
+     */
     private volatile boolean cancel;
 
+    /**
+     * 构造器
+     * @param url 重试URL
+     * @param registry 重试注册中心
+     * @param taskName 任务名称
+     */
     AbstractRetryTask(URL url, FailbackRegistry registry, String taskName) {
         if (url == null || StringUtils.isBlank(taskName)) {
             throw new IllegalArgumentException();
@@ -81,7 +97,9 @@ public abstract class AbstractRetryTask implements TimerTask {
         this.registry = registry;
         this.taskName = taskName;
         cancel = false;
+        //从URL中根据retry.period获取重试间隔，默认5秒
         this.retryPeriod = url.getParameter(REGISTRY_RETRY_PERIOD_KEY, DEFAULT_REGISTRY_RETRY_PERIOD);
+        //从URL中根据retry.times获取重试次数，默认3次
         this.retryTimes = url.getParameter(REGISTRY_RETRY_TIMES_KEY, DEFAULT_REGISTRY_RETRY_TIMES);
     }
 
@@ -93,6 +111,11 @@ public abstract class AbstractRetryTask implements TimerTask {
         return cancel;
     }
 
+    /**
+     * 重新载入
+     * @param timeout
+     * @param tick
+     */
     protected void reput(Timeout timeout, long tick) {
         if (timeout == null) {
             throw new IllegalArgumentException();
@@ -106,12 +129,19 @@ public abstract class AbstractRetryTask implements TimerTask {
         timer.newTimeout(timeout.task(), tick, TimeUnit.MILLISECONDS);
     }
 
+    /**
+     * 运行的任务
+     * @param timeout a handle which is associated with this task
+     * @throws Exception
+     */
     @Override
     public void run(Timeout timeout) throws Exception {
+        //其他的线程取消了该任务或者停止该任务，直接返回
         if (timeout.isCancelled() || timeout.timer().isStop() || isCancel()) {
             // other thread cancel this timeout or stop the timer.
             return;
         }
+        //重试次数大于最大重试次数，直接返回
         if (times > retryTimes) {
             // reach the most times of retry.
             logger.warn("Final failed to execute task " + taskName + ", url: " + url + ", retry " + retryTimes + " times.");
@@ -121,6 +151,7 @@ public abstract class AbstractRetryTask implements TimerTask {
             logger.info(taskName + " : " + url);
         }
         try {
+            //重试，这个是模板方法，需要子类实现
             doRetry(url, registry, timeout);
         } catch (Throwable t) { // Ignore all the exceptions and wait for the next retry
             logger.warn("Failed to execute task " + taskName + ", url: " + url + ", waiting for again, cause:" + t.getMessage(), t);

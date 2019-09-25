@@ -24,6 +24,7 @@ import org.apache.dubbo.rpc.Result;
 import org.apache.dubbo.rpc.RpcException;
 
 /**
+ * 消费者的invoker包装器
  * @date 2017/11/23
  */
 public class ConsumerInvokerWrapper<T> implements Invoker {

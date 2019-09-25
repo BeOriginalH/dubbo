@@ -21,6 +21,7 @@ import org.apache.dubbo.common.URL;
 import java.util.List;
 
 /**
+ * 通知监听器
  * NotifyListener. (API, Prototype, ThreadSafe)
  *
  * @see org.apache.dubbo.registry.RegistryService#subscribe(URL, NotifyListener)
@@ -28,6 +29,7 @@ import java.util.List;
 public interface NotifyListener {
 
     /**
+     * 当收到服务变更时触发
      * Triggered when a service change notification is received.
      * <p>
      * Notify needs to support the contract: <br>
@@ -37,6 +39,12 @@ public interface NotifyListener {
      * 4. If a data type is empty, need to notify a empty protocol with category parameter identification of url data.<br>
      * 5. The order of notifications to be guaranteed by the notifications(That is, the implementation of the registry). Such as: single thread push, queue serialization, and version comparison.<br>
      *
+     * 1. 总是以服务接口和数据类型为维度全量通知，即不会通知一个服务的同类型的部分数据，用户不需要对比上一次通知结果。<br>
+     *      * 2. 订阅时的第一次通知，必须是一个服务的所有类型数据的全量通知。<br>
+     *      * 3. 中途变更时，允许不同类型的数据分开通知，比如：providers, consumers, routes, overrides，允许只通知其中一种类型，但该类型的数据必须是全量的，不是增量的。<br>
+     *      * 4. 如果一种类型的数据为空，需通知一个empty协议并带category参数的标识性URL数据。<br>
+     *      * 5. 通知者(即注册中心实现)需保证通知的顺序，比如：单线程推送，队列串行化，带版本对比。<br>
+     *      *
      * @param urls The list of registered information , is always not empty. The meaning is the same as the return value of {@link org.apache.dubbo.registry.RegistryService#lookup(URL)}.
      */
     void notify(List<URL> urls);

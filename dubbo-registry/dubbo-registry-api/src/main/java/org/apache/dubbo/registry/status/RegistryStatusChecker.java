@@ -25,6 +25,7 @@ import org.apache.dubbo.registry.support.AbstractRegistryFactory;
 import java.util.Collection;
 
 /**
+ * 注册状态校验
  * RegistryStatusChecker
  *
  */
@@ -33,6 +34,8 @@ public class RegistryStatusChecker implements StatusChecker {
 
     @Override
     public Status check() {
+
+        //获取所有的注册中心对象
         Collection<Registry> registries = AbstractRegistryFactory.getRegistries();
         if (registries.isEmpty()) {
             return new Status(Status.Level.UNKNOWN);

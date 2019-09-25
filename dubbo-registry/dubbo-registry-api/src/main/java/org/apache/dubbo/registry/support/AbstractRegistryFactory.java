@@ -35,6 +35,7 @@ import static org.apache.dubbo.rpc.cluster.Constants.EXPORT_KEY;
 import static org.apache.dubbo.rpc.cluster.Constants.REFER_KEY;
 
 /**
+ * 注册中心工厂实现
  * AbstractRegistryFactory. (SPI, Singleton, ThreadSafe)
  *
  * @see org.apache.dubbo.registry.RegistryFactory
@@ -45,9 +46,11 @@ public abstract class AbstractRegistryFactory implements RegistryFactory {
     private static final Logger LOGGER = LoggerFactory.getLogger(AbstractRegistryFactory.class);
 
     // The lock for the acquisition process of the registry
+    //注册的时候的锁对象
     private static final ReentrantLock LOCK = new ReentrantLock();
 
     // Registry Collection Map<RegistryAddress, Registry>
+    //注册集合
     private static final Map<String, Registry> REGISTRIES = new HashMap<>();
 
     /**
@@ -56,14 +59,17 @@ public abstract class AbstractRegistryFactory implements RegistryFactory {
      * @return all registries
      */
     public static Collection<Registry> getRegistries() {
+
         return Collections.unmodifiableCollection(REGISTRIES.values());
     }
 
     /**
+     * 注销所有的已注册的注册中心
      * Close all created registries
      */
     // TODO: 2017/8/30 to move somewhere else better
     public static void destroyAll() {
+
         if (LOGGER.isInfoEnabled()) {
             LOGGER.info("Close all registries " + getRegistries());
         }
@@ -84,13 +90,20 @@ public abstract class AbstractRegistryFactory implements RegistryFactory {
         }
     }
 
+    /**
+     *
+     *连接到注册中心
+     * @param url Registry address, is not allowed to be empty
+     * @return
+     */
     @Override
     public Registry getRegistry(URL url) {
-        url = URLBuilder.from(url)
-                .setPath(RegistryService.class.getName())
-                .addParameter(INTERFACE_KEY, RegistryService.class.getName())
-                .removeParameters(EXPORT_KEY, REFER_KEY)
-                .build();
+
+        //格式化URL
+        url = URLBuilder.from(url).setPath(RegistryService.class.getName())
+            .addParameter(INTERFACE_KEY, RegistryService.class.getName()).removeParameters(EXPORT_KEY, REFER_KEY)
+            .build();
+        //通过URL生成key
         String key = url.toServiceStringWithoutResolving();
         // Lock the registry access process to ensure a single instance of the registry
         LOCK.lock();
@@ -100,6 +113,7 @@ public abstract class AbstractRegistryFactory implements RegistryFactory {
                 return registry;
             }
             //create registry by spi/ioc
+            //创建register，这个是模板方法，需要子类实现
             registry = createRegistry(url);
             if (registry == null) {
                 throw new IllegalStateException("Can not create registry " + url);

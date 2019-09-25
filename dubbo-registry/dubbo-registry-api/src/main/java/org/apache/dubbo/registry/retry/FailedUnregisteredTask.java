@@ -22,6 +22,7 @@ import org.apache.dubbo.common.timer.Timeout;
 import org.apache.dubbo.registry.support.FailbackRegistry;
 
 /**
+ * 取消订阅失败重试任务
  * FailedUnregisteredTask
  */
 public final class FailedUnregisteredTask extends AbstractRetryTask {
@@ -32,6 +33,12 @@ public final class FailedUnregisteredTask extends AbstractRetryTask {
         super(url, registry, NAME);
     }
 
+    /**
+     * 取消注册
+     * @param url
+     * @param registry
+     * @param timeout
+     */
     @Override
     protected void doRetry(URL url, FailbackRegistry registry, Timeout timeout) {
         registry.doUnregister(url);

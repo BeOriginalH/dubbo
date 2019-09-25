@@ -27,6 +27,7 @@ import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
 
 /**
+ * 通知失败重试任务
  * FailedNotifiedTask
  */
 public final class FailedNotifiedTask extends AbstractRetryTask {

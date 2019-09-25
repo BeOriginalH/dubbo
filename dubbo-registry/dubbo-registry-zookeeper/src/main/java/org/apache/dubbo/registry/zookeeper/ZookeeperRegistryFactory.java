@@ -22,6 +22,7 @@ import org.apache.dubbo.registry.support.AbstractRegistryFactory;
 import org.apache.dubbo.remoting.zookeeper.ZookeeperTransporter;
 
 /**
+ * zookeeper注册中心工厂
  * ZookeeperRegistryFactory.
  *
  */

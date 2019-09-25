@@ -23,6 +23,7 @@ import org.apache.dubbo.registry.NotifyListener;
 import org.apache.dubbo.registry.support.FailbackRegistry;
 
 /**
+ * 订阅失败重试任务
  * FailedSubscribedTask
  */
 public final class FailedSubscribedTask extends AbstractRetryTask {
@@ -39,6 +40,12 @@ public final class FailedSubscribedTask extends AbstractRetryTask {
         this.listener = listener;
     }
 
+    /**
+     * 重新订阅
+     * @param url
+     * @param registry
+     * @param timeout
+     */
     @Override
     protected void doRetry(URL url, FailbackRegistry registry, Timeout timeout) {
         registry.doSubscribe(url, listener);
